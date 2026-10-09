@@ -1,0 +1,23 @@
+# Virtual environment and tool caches (Java: target/, .gradle/)
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Build output (Java: target/*.jar)
+build/
+dist/
+*.egg-info/
+
+# Playwright output: traces, screenshots, videos (ex12)
+test-results/
+
+# Saved login state (ex13, ex15): holds session cookies, never commit it
+*.state.json
+state.json
+.auth/
+
+# Local secrets.
+.env

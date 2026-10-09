@@ -1,0 +1,44 @@
+[project]
+name = "shopkit"
+version = "0.1.0"
+description = "Python Playwright framework"
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic",
+    "pydantic-settings",
+    "faker",
+    "pytest",
+    "pytest-playwright",
+    "pytest-bdd",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+shopkit = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+plugins = [
+    "pydantic.mypy",
+] # teaches mypy pydantic's extras, e.g. Settings(_env_file=...)
