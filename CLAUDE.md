@@ -13,6 +13,10 @@ The user is an experienced Java Selenium/Cucumber/RestAssured engineer. They alr
 `toolkit` framework against saucedemo, phases 1–5 done). This repo consolidates that work into
 one framework, built properly from the start. Progress lives in `NOTES.md`.
 
+The framework is laid out so more applications (saucedemo, Salesforce, ...) can be added later:
+a `core` package that knows no app, and one package per app under `apps/`. Multi-app machinery
+is NOT built ahead of time; see `docs/adr/0001-core-and-apps-layout.md`.
+
 ## How we work (important)
 
 - **The user writes every file.** Claude gives one milestone spec at a time (goal, target
@@ -30,7 +34,7 @@ one framework, built properly from the start. Progress lives in `NOTES.md`.
 | # | Milestone | Practises | Done when |
 | --- | --- | --- | --- |
 | M0 | Project skeleton | src layout, pyproject, venv, ruff/mypy strict | `pytest` runs, quality gates pass, first commit |
-| M1 | Config | pydantic Settings, `--env` option, session fixture, pytest plugin entry point | same tests run against `dev` or `ci` |
+| M1 | Config | rename package, core/apps split, generic `load_settings`, app Settings, `--env` option, session fixtures, pytest plugin entry point | same tests run against `dev` or `ci`; `--env nope` fails clearly |
 | M2 | API client | Playwright `APIRequestContext`, typed response models, `responseCode` check | API tests: products, search, verifyLogin, 405 |
 | M3 | Test data | Faker factory + factory fixture with `yield` cleanup | a test creates 3 users, none left behind |
 | M4 | Web layer | page objects, components, ad blocking via `page.route`, locator strategy | UI tests: signup, login, products, cart |
@@ -40,21 +44,34 @@ one framework, built properly from the start. Progress lives in `NOTES.md`.
 
 ## Target layout
 
+Package name `qakit` is a placeholder (currently `shopkit`); the rename happens in M1.
+
 ```
-pyproject.toml            deps + pytest/ruff/mypy config
-envs/                     dev.env, ci.env
-src/shopkit/              the framework (pip install -e .)
-    config.py             typed Settings
-    api/                  client.py, models.py
-    pages/                base page, components/, one class per page
-    data/                 Faker factories
-    plugin.py             all fixtures, registered via [project.entry-points.pytest11]
+pyproject.toml                    deps + pytest/ruff/mypy config
+envs/
+    automationexercise/           dev.env, ci.env
+src/qakit/                        the framework (pip install -e .)
+    core/                         knows no app; never imports from apps/
+        config.py                 generic load_settings(settings_cls, env, envs_dir)
+        plugin.py                 --env option + generic fixtures (pytest11 entry point)
+    apps/
+        automationexercise/       app code; may import from core
+            config.py             AutomationExerciseSettings
+            api/                  client.py, models.py
+            pages/                base page, components/, one class per page
+            data/                 Faker factories
 tests/
-    api/  ui/             plain pytest tests
-    bdd/features/         .feature files + step modules
-docs/adr/                 decisions (port ADR 0001 on BDD from ../python-playwright/docs/adr/)
+    core/                         unit tests for core
+    automationexercise/
+        conftest.py               app fixtures: settings, api client, pages
+        api/  ui/                 plain pytest tests
+        bdd/features/             .feature files + step modules
+docs/adr/                         0001 core/apps layout; 0002 BDD (port from ../python-playwright)
 .github/workflows/ci.yml
 ```
+
+Something moves into `core` only when a second app needs it (rule of three); until then it
+lives in the app package.
 
 ## automationexercise.com API quirks (checked 2026-10-09)
 
@@ -76,12 +93,15 @@ pip install -e ".[dev]"; playwright install chromium
 ruff check src tests; ruff format --check src tests
 mypy src tests
 pytest -v
+pytest tests/automationexercise --env ci     # one app, one environment
 ```
 
 ## Conventions carried over from the training
 
 - ruff line length 100, mypy `strict = true`; every `def` has a return type.
 - Fixtures are requested by parameter name, never imported and called.
+- `core` never imports from `apps`. App fixtures live in `tests/<app>/conftest.py`, so they are
+  visible only to that app's tests.
 - Locators: role > label/placeholder/test id > CSS. Assert with `expect(...)`, never with
   `count()` / `is_visible()`.
 - Never make a test green by changing the expected value: fix the cause.

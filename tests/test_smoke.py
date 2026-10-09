@@ -1,5 +1,5 @@
-import shopkit
+import qakit
 
 
 def test_version() -> None:
-    assert shopkit.__version__ == "0.1.0"
+    assert qakit.__version__ == "0.1.0"
