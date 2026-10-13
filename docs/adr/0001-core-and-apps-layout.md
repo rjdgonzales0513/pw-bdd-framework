@@ -62,3 +62,12 @@ everything.
   Rejected: it designs for applications we haven't seen yet.
 - **Separate repositories from day one** (core library + one test repo per app). Right for
   several teams, too much overhead for one person and one app.
+
+## Update 2026-10-12: second application
+
+saucedemo was added as `apps/saucedemo/`, `envs/saucedemo/` and `tests/saucedemo/`, with no
+change to automationexercise. One thing moved into `core` because both apps needed it: the
+per-app test id attribute (`test_id_attribute` fixture + `use_test_id_attribute()`). Ad
+blocking, the user registry and the base page stay app-specific. The reporting plugin
+(`core/reporting.py`) was app-agnostic from the start. See
+[the guide on adding an application](../guide/08-adding-an-application.md).

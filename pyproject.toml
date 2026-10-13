@@ -1,7 +1,7 @@
 [project]
 name = "qakit"
 version = "0.1.0"
-description = "Python Playwright framework"
+description = "Python Playwright + pytest-bdd framework for testing web UIs and REST APIs"
 requires-python = ">=3.14"
 dependencies = [
     "pydantic",
@@ -10,13 +10,17 @@ dependencies = [
     "pytest",
     "pytest-playwright",
     "pytest-bdd",
+    "pytest-html",
 ]
 
 [project.optional-dependencies]
 dev = ["ruff", "mypy"]
 
+# Two pytest plugins, loaded automatically wherever qakit is installed.
+# Entry points are install metadata: after editing them, run pip install -e . again.
 [project.entry-points.pytest11]
 qakit = "qakit.core.plugin"
+qakit_reporting = "qakit.core.reporting"
 
 [build-system]
 requires = ["setuptools>=69"]
@@ -30,7 +34,26 @@ qakit = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = []
+# -ra: summary of every non-passing test.  --strict-markers: an unregistered marker or
+# Gherkin tag (@smok) is an error, not a silent no-op.  -p pytester: lets tests/core run
+# pytest inside pytest to test the plugins.
+# Reports: one self-contained HTML file plus Cucumber JSON, both in reports/.
+# Playwright keeps a trace and a screenshot only for failed tests, in test-results/.
+addopts = """
+    -ra --strict-markers -p pytester
+    --html=reports/report.html --self-contained-html
+    --cucumberjson=reports/cucumber.json
+    --tracing=retain-on-failure --screenshot=only-on-failure --output=test-results
+"""
+# Gherkin tags become pytest markers, so every tag used in a .feature file is listed here.
+markers = [
+    "smoke: the fast must-pass set, run on every push",
+    "api: talks to the REST API only, no browser",
+    "ui: drives a browser",
+    "account: signup, login, logout and account deletion",
+    "shopping: products, search and cart",
+    "checkout: placing an order",
+]
 
 [tool.ruff]
 line-length = 100
@@ -43,5 +66,10 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
 strict = true
 python_version = "3.14"
 plugins = [
-    "pydantic.mypy",
-] # teaches mypy pydantic's extras, e.g. Settings(_env_file=...)
+    "pydantic.mypy", # teaches mypy pydantic's extras, e.g. Settings(_env_file=...)
+]
+
+# pytest-html and pytest-metadata ship no type hints (no py.typed).
+[[tool.mypy.overrides]]
+module = ["pytest_html", "pytest_html.*", "pytest_metadata", "pytest_metadata.*"]
+ignore_missing_imports = true

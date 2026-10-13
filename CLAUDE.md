@@ -4,74 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Purpose
 
-A learning project: a **from-scratch rebuild** of a senior-level Python Playwright framework.
-It tests both the web UI and the REST API of https://automationexercise.com, and adds a BDD
-layer with pytest-bdd.
+A Python Playwright test framework (package `qakit`) with a BDD layer on pytest-bdd.
+It tests two applications: https://automationexercise.com (REST API + UI + BDD) and
+https://www.saucedemo.com (UI + BDD).
 
-The user is an experienced Java Selenium/Cucumber/RestAssured engineer. They already did an
-11–12 week training in the sibling repo `..\python-playwright` (exercises ex01–ex18, a
-`toolkit` framework against saucedemo, phases 1–5 done). This repo consolidates that work into
-one framework, built properly from the start. Progress lives in `NOTES.md`.
+A `core` package knows no app; each app has its own package under `apps/`. Code moves into
+`core` only when a second app needs it; see `docs/adr/0001-core-and-apps-layout.md`.
+The guide for engineers is `docs/guide/` (start at `docs/guide/README.md`).
 
-The framework is laid out so more applications (saucedemo, Salesforce, ...) can be added later:
-a `core` package that knows no app, and one package per app under `apps/`. Multi-app machinery
-is NOT built ahead of time; see `docs/adr/0001-core-and-apps-layout.md`.
-
-## How we work (important)
-
-- **The user writes every file.** Claude gives one milestone spec at a time (goal, target
-  structure, Java comparisons, done-criteria), then reviews when asked ("review M3").
-  Don't write framework code or tests unless the user explicitly asks. Give hints, explain
-  failures, show Java side by side with Python (the user knows the concepts, not always the
-  Python syntax).
-- **Reviews:** run ruff, mypy and pytest; check the code does what the spec asks; check tests
-  can fail (break the key action in a scratchpad copy, or ask the user to, and watch it go red).
-  Ask 2–3 "why" questions about lines the user wrote.
-- When the user says "save the session", update `NOTES.md` (Status, Next up, tips).
-
-## Milestones
-
-| # | Milestone | Practises | Done when |
-| --- | --- | --- | --- |
-| M0 | Project skeleton | src layout, pyproject, venv, ruff/mypy strict | `pytest` runs, quality gates pass, first commit |
-| M1 | Config | rename package, core/apps split, generic `load_settings`, app Settings, `--env` option, session fixtures, pytest plugin entry point | same tests run against `dev` or `ci`; `--env nope` fails clearly |
-| M2 | API client | Playwright `APIRequestContext`, typed response models, `responseCode` check | API tests: products, search, verifyLogin, 405 |
-| M3 | Test data | Faker factory + factory fixture with `yield` cleanup | a test creates 3 users, none left behind |
-| M4 | Web layer | page objects, components, ad blocking via `page.route`, locator strategy | UI tests: signup, login, products, cart |
-| M5 | Hybrid | create user via API, test via UI, delete via API; storage state | login test needs no UI signup |
-| M6 | BDD | declarative features, steps reuse fixtures, tags, ADR | `pytest -m smoke` runs the journeys |
-| M7 | CI | GitHub Actions, browser matrix, traces uploaded on failure | a deliberately red run gives a downloadable trace |
-
-## Target layout
-
-Package name `qakit` is a placeholder (currently `shopkit`); the rename happens in M1.
+## Layout (as built, 2026-10-12)
 
 ```
-pyproject.toml                    deps + pytest/ruff/mypy config
-envs/
-    automationexercise/           dev.env, ci.env
-src/qakit/                        the framework (pip install -e .)
+pyproject.toml                    deps, pytest addopts (reports, traces), markers, ruff/mypy
+envs/<app>/                       dev.env, ci.env  (automationexercise: AE_*, saucedemo: SD_*)
+src/qakit/
     core/                         knows no app; never imports from apps/
-        config.py                 generic load_settings(settings_cls, env, envs_dir)
-        plugin.py                 --env option + generic fixtures (pytest11 entry point)
-    apps/
-        automationexercise/       app code; may import from core
-            config.py             AutomationExerciseSettings
-            api/                  client.py, models.py
-            pages/                base page, components/, one class per page
-            data/                 Faker factories
+        config.py                 load_settings(settings_cls, env, envs_dir)
+        plugin.py                 --env, env_name, envs_root, test_id_attribute (+ autouse apply)
+        reporting.py              pytest11 plugin: BDD steps + Description in pytest-html
+    apps/automationexercise/      config.py, api/ (client, models), data/ (users, registry),
+                                  pages/ (base, pages, components/, ad_blocking.py)
+    apps/saucedemo/               config.py, data/customers.py, pages/pages.py
 tests/
-    core/                         unit tests for core
-    automationexercise/
-        conftest.py               app fixtures: settings, api client, pages
-        api/  ui/                 plain pytest tests
-        bdd/features/             .feature files + step modules
-docs/adr/                         0001 core/apps layout; 0002 BDD (port from ../python-playwright)
-.github/workflows/ci.yml
+    core/test_reporting.py        unit + pytester test of the reporting plugin
+    <app>/conftest.py             app fixtures (settings, test id, browser args, pages, data)
+    <app>/api/ ui/                plain pytest tests
+    <app>/bdd/features/*.feature  + bdd/test_*.py (scenarios() + step definitions)
+docs/guide/                       framework guide, 10 pages (README.md is the index)
+docs/adr/                         0001 layout, 0002 BDD, 0003 reporting
+.github/workflows/ci.yml          quality -> api -> ui x [chromium, firefox]; artifacts
 ```
-
-Something moves into `core` only when a second app needs it (rule of three); until then it
-lives in the app package.
 
 ## automationexercise.com API quirks (checked 2026-10-09)
 
@@ -81,11 +43,13 @@ lives in the app package.
 - The JSON body is served as `Content-Type: text/html`; Playwright's `.json()` still parses it.
 - Requests send **form fields**: Playwright `form=`, not `data=`/JSON.
 - API list: https://automationexercise.com/api_list
-- The UI shows ads and a consent dialog: block ad hosts with `page.route` (M4).
+- The UI shows ads and a consent dialog: `pages/ad_blocking.py` allows only the site's own host.
+- `createAccount` answers responseCode **201**; a wrong password on verifyLogin is 404.
+- Product cards render every product twice (hover overlay): scope locators to `.productinfo`.
 
 ## Commands
 
-Windows, Python 3.14 venv in `.venv` (activate THIS repo's venv, not python-playwright's).
+Windows, Python 3.14 venv in `.venv`.
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -96,7 +60,7 @@ pytest -v
 pytest tests/automationexercise --env ci     # one app, one environment
 ```
 
-## Conventions carried over from the training
+## Conventions
 
 - ruff line length 100, mypy `strict = true`; every `def` has a return type.
 - Fixtures are requested by parameter name, never imported and called.
@@ -106,3 +70,4 @@ pytest tests/automationexercise --env ci     # one app, one environment
   `count()` / `is_visible()`.
 - Never make a test green by changing the expected value: fix the cause.
 - Gherkin is declarative (business actions, not clicks).
+- Check a new test can fail: break the key action (in a scratchpad copy) and watch it go red.

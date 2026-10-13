@@ -1,0 +1,86 @@
+# Runs on every push and pull request (Java: a Jenkinsfile / GitHub Actions with Maven).
+#   quality  ruff + mypy, no browser             -> fails fast on style and type errors
+#   api      API tests once (no browser needed)
+#   ui       UI + BDD tests, once per browser in the matrix
+# Every test job uploads the HTML report; failed runs also upload Playwright traces.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: # a "Run workflow" button in the Actions tab
+
+# A newer push to the same branch cancels the run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+      - run: mypy src tests
+
+  api:
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -e ".[dev]"
+      # The API tests use Playwright's HTTP client, which needs the driver but no browser.
+      - run: pytest -m api --env ci
+      - name: Upload report
+        if: always() # also (especially) when the tests failed
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-api
+          path: reports/
+
+  ui:
+    needs: quality
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # one browser failing doesn't cancel the others
+      matrix:
+        browser: [chromium, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: playwright install --with-deps ${{ matrix.browser }}
+      # Everything that is not an API test: UI tests, BDD scenarios and the core tests.
+      - run: pytest -m "not api" --env ci --browser ${{ matrix.browser }}
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ matrix.browser }}
+          path: reports/
+      # test-results/ holds trace.zip + screenshot of every FAILED test (retain-on-failure).
+      # Open a trace with: playwright show-trace trace.zip   (or drop it on trace.playwright.dev)
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traces-${{ matrix.browser }}
+          path: test-results/
+          retention-days: 7

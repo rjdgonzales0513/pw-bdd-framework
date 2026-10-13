@@ -21,3 +21,6 @@ state.json
 
 # Local secrets.
 .env
+
+# Test reports (pytest-html, Cucumber JSON)
+reports/
